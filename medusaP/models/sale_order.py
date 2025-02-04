@@ -45,28 +45,28 @@ class AccountInvoice(models.Model):
 
         for invoice in self:
             if invoice.sale_order_id:
-                # Obtener los pickings relacionados al pedido de venta
                 sale_order = invoice.sale_order_id
-                for picking in sale_order.picking_ids:
-                    if picking.state in ['confirmed', 'assigned']:
-                        # Procesar cada picking relacionado
-                        for move_line in picking.move_line_ids:
-                            # Buscar la línea de factura correspondiente al producto del movimiento
-                            invoice_line = invoice.invoice_line_ids.filtered(lambda l: l.product_id == move_line.product_id)
-                            if invoice_line:
-                                qty_to_process = sum(line.quantity for line in invoice_line)
-                                # Ajustar la cantidad hecha basada en la cantidad facturada
-                                move_line.qty_done = qty_to_process if qty_to_process < move_line.product_uom_qty else move_line.product_uom_qty
-                                # Validar el picking si la cantidad realizada es igual a la cantidad reservada
-                                if move_line.qty_done == move_line.product_uom_qty:
-                                    move_line.move_id._action_done()
+                for picking in sale_order.picking_ids.filtered(lambda p: p.state in ['confirmed', 'assigned']):
+                    for move_line in picking.move_line_ids:
+                        invoice_line = invoice.invoice_line_ids.filtered(lambda l: l.product_id == move_line.product_id)
+                        if invoice_line:
+                            qty_reserved = move_line.reserved_availability
+                            qty_to_process = sum(line.quantity for line in invoice_line)
+                            
+                            if qty_reserved > 0:
+                                # Procesar solo hasta la cantidad reservada o la cantidad requerida
+                                move_line.qty_done = min(qty_reserved, qty_to_process)
 
-                        # Validar el picking después de ajustar las cantidades y asignar la factura que lo validó
+                    # Verificar si todas las líneas pueden ser completadas
+                    pending_lines = picking.move_line_ids.filtered(lambda ml: ml.qty_done < ml.product_uom_qty)
+                    if not pending_lines:
+                        # Si todas las líneas están completas, validar el picking
                         picking.validated_invoice_id = invoice
                         picking.sudo().action_done()
-
-                        # Registrar que los movimientos de inventario se validaron
                         invoice.validated_picking_id = picking
-                        invoice.message_post(body=_("Los movimientos de inventario relacionados al pedido %s han sido confirmados y procesados según la factura.") % sale_order.name)
+                        invoice.message_post(body=_("Todos los movimientos de inventario relacionados al pedido %s han sido confirmados y procesados según la factura.") % sale_order.name)
+                    else:
+                        # Registrar las líneas pendientes
+                        invoice.message_post(body=_("Algunas líneas de productos en el picking del pedido %s no tienen disponibilidad completa.") % sale_order.name)
 
         return res
