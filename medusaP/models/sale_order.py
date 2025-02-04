@@ -28,13 +28,17 @@ class AccountInvoice(models.Model):
     def create(self, vals):
         # Crear la factura
         invoice = super(AccountInvoice, self).create(vals)
-        
-        # Relacionar el pedido de venta basado en el campo 'origin'
-        if invoice.origin:
-            sale_order = self.env['sale.order'].search([('name', '=', invoice.origin)], limit=1)
+
+        # Verificar si se ha proporcionado un valor para 'origin'
+        if vals.get('origin'):
+            # Buscar el pedido de venta relacionado
+            sale_order = self.env['sale.order'].search([('name', '=', vals['origin'])], limit=1)
             if sale_order:
-                invoice.sale_order_id = sale_order
-        
+                invoice.sale_order_id = sale_order.id
+            else:
+                # Registrar un mensaje si no se encuentra el pedido de venta
+                _logger.warning(f"No se encontró un pedido de venta con el nombre '{vals['origin']}'")
+
         return invoice
 
 
