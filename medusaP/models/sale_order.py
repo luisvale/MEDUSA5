@@ -38,6 +38,10 @@ class AccountInvoice(models.Model):
         return invoice
 
 
+
+class AccountInvoice(models.Model):
+    _inherit = 'account.invoice'
+
     @api.multi
     def action_invoice_open(self):
         # Llama al método original para validar la factura
@@ -50,23 +54,22 @@ class AccountInvoice(models.Model):
                     for move_line in picking.move_line_ids:
                         invoice_line = invoice.invoice_line_ids.filtered(lambda l: l.product_id == move_line.product_id)
                         if invoice_line:
-                            qty_reserved = move_line.reserved_availability
+                            # Obtener la cantidad disponible reservada desde el movimiento principal (move_id)
+                            qty_reserved = move_line.move_id.reserved_availability
                             qty_to_process = sum(line.quantity for line in invoice_line)
-                            
+
                             if qty_reserved > 0:
                                 # Procesar solo hasta la cantidad reservada o la cantidad requerida
                                 move_line.qty_done = min(qty_reserved, qty_to_process)
 
-                    # Verificar si todas las líneas pueden ser completadas
+                    # Validar el picking si todas las líneas procesadas tienen cantidades completas
                     pending_lines = picking.move_line_ids.filtered(lambda ml: ml.qty_done < ml.product_uom_qty)
                     if not pending_lines:
-                        # Si todas las líneas están completas, validar el picking
                         picking.validated_invoice_id = invoice
                         picking.sudo().action_done()
                         invoice.validated_picking_id = picking
                         invoice.message_post(body=_("Todos los movimientos de inventario relacionados al pedido %s han sido confirmados y procesados según la factura.") % sale_order.name)
                     else:
-                        # Registrar las líneas pendientes
                         invoice.message_post(body=_("Algunas líneas de productos en el picking del pedido %s no tienen disponibilidad completa.") % sale_order.name)
 
         return res
