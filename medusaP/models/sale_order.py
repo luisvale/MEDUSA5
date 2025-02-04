@@ -14,15 +14,18 @@ class StockPicking(models.Model):
 class AccountInvoice(models.Model):
     _inherit = "account.invoice"
 
+    # Campo Many2one para relacionar el picking que validó la factura
+    validated_picking_id = fields.Many2one(
+        'stock.picking',
+        string='Validated Picking',
+        help='Picking relacionado que validó esta factura'
+    )
+
+
     # Campo Many2one que relaciona la factura con el pedido de venta
     sale_order_id = fields.Many2one('sale.order', string="Pedido de Venta Relacionado", readonly=True)
     
-    # Campo que relaciona la factura con el picking que la validó
-    validated_picking_id = fields.Many2one(
-        'stock.picking', 
-        string='Validated Picking', 
-        help='The picking that validated this invoice.'
-    )
+
 
     @api.model
     def create(self, vals):
